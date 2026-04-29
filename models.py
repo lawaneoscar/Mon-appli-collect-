@@ -1,4 +1,3 @@
-        # models.py - Modèles de base de données
 from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey, DateTime
 from sqlalchemy.orm import relationship, declarative_base
 import datetime
@@ -16,6 +15,7 @@ class Client(Base):
     releves = relationship("ReleveQuotidien", back_populates="foyer")
     appareils = relationship("Appareil", back_populates="foyer")
 
+
 class ReleveQuotidien(Base):
     __tablename__ = "releves_quotidiens"
     id = Column(Integer, primary_key=True)
@@ -27,6 +27,7 @@ class ReleveQuotidien(Base):
     cout_estime_fcfa = Column(Float, nullable=True)
     foyer = relationship("Client", back_populates="releves")
 
+
 class Appareil(Base):
     __tablename__ = "appareils"
     id = Column(Integer, primary_key=True)
@@ -35,5 +36,4 @@ class Appareil(Base):
     puissance_watts = Column(Integer)
     heures_utilisation_jour = Column(Float)
     nombre_appareils = Column(Integer, default=1)
-    foyer = relationship("Client", back_populates="appareils")                                                                                            nombre_appareils = Column(Integer, default=1)
-                                                                                                        foyer = relationship("Client", back_populates="appareils")
+    foyer = relationship("Client", back_populates="appareils")
