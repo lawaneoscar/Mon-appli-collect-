@@ -63,13 +63,21 @@ if menu == "🏠 Accueil & Collecte":
         st.subheader("👥 Clients enregistrés")
         db = db_session()
         clients = db.query(Client).all()
-        db.close()
         if clients:
-            data = [{"ID": c.id, "Nom": c.nom_utilisateur, "Région": c.region,
-                     "Logement": c.type_logement, "Relevés": len(c.releves)} for c in clients]
+            data = []
+            for c in clients:
+                nb_releves = len(c.releves)
+                data.append({
+                    "ID": c.id,
+                    "Nom": c.nom_utilisateur,
+                    "Région": c.region,
+                    "Logement": c.type_logement,
+                    "Relevés": nb_releves
+                })
             st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
         else:
             st.info("Aucun client enregistré")
+        db.close()
 
     with col2:
         st.subheader("📝 Nouveau Relevé Quotidien")
@@ -108,12 +116,12 @@ if menu == "🏠 Accueil & Collecte":
         # Appareils énergivores
         st.markdown("---")
         st.subheader("🔌 Analyse des Appareils Énergivores")
+        db = db_session()
+        clients = db.query(Client).all()
         if clients:
             client_app = st.selectbox("Client pour appareils", clients,
                                       format_func=lambda c: c.nom_utilisateur, key="client_app")
-            db = db_session()
             apps = db.query(Appareil).filter(Appareil.foyer_id == client_app.id).all()
-            db.close()
 
             if apps:
                 app_data = []
@@ -125,19 +133,20 @@ if menu == "🏠 Accueil & Collecte":
                 st.plotly_chart(fig_pie, use_container_width=True)
                 top = df_app.iloc[0]
                 st.error(f"⚠️ **{top['Appareil']}** est le plus énergivore : **{top['kWh/jour']} kWh/jour**")
+            else:
+                st.info("Aucun appareil enregistré pour ce client")
 
             with st.form("ajout_appareil"):
                 nom_app = st.text_input("Nom de l'appareil")
                 watts = st.number_input("Puissance (Watts)", min_value=1, value=100)
                 heures = st.number_input("Heures/jour", min_value=0.1, value=1.0, step=0.5)
                 if st.form_submit_button("➕ Ajouter l'appareil") and nom_app:
-                    db = db_session()
                     db.add(Appareil(foyer_id=client_app.id, nom_appareil=nom_app,
                                     puissance_watts=watts, heures_utilisation_jour=heures, nombre_appareils=1))
                     db.commit()
-                    db.close()
                     st.success(f"✅ '{nom_app}' ajouté !")
                     st.rerun()
+        db.close()
 
 # ================================================================
 # PAGE 2 : DASHBOARD CLIENT
@@ -247,7 +256,6 @@ elif menu == "📈 Analyses Avancées":
         st.subheader("🔬 2. Régression Linéaire Multiple")
         st.markdown("*Prédiction de la consommation (kWh) en fonction de : température + durée coupure*")
 
-        # Préparer les données
         df_valid = df[df['temperature'] > 0].copy()
         if len(df_valid) >= 10:
             X_multi = df_valid[['temperature', 'coupure_min']].values
@@ -266,7 +274,6 @@ elif menu == "📈 Analyses Avancées":
                 + {result_multi['coefficients'][1]:.2f} × Coupure
                 """)
 
-                # Graphique valeurs réelles vs prédites
                 fig_multi = px.scatter(x=y_multi, y=result_multi['y_pred'],
                                        labels={"x": "Valeurs réelles (kWh)", "y": "Valeurs prédites (kWh)"},
                                        title="Régression multiple : Réel vs Prédit")
@@ -303,8 +310,7 @@ elif menu == "📈 Analyses Avancées":
 
             fig_acp = px.scatter(df_pca, x="Composante 1", y="Composante 2",
                                  text="Client", color="Région",
-                                 title="ACP - Projection des clients",
-                                 size=[10]*len(df_pca))
+                                 title="ACP - Projection des clients")
             fig_acp.update_traces(textposition='top center')
             st.plotly_chart(fig_acp, use_container_width=True)
             st.info("Chaque point représente un client. Les clients proches ont des profils de consommation similaires.")
@@ -314,7 +320,7 @@ elif menu == "📈 Analyses Avancées":
         # ---- 5. K-MEANS - Classification Non Supervisée ----
         st.markdown("---")
         st.subheader("🔄 5. K-Means - Classification Non Supervisée")
-        st.markdown("*Regroupement automatique des clients en 3 clusters*")
+        st.markdown("*Regroupement automatique des clients en clusters*")
 
         if len(df_clients) >= 6:
             X_km = df_clients[['moyenne_kwh', 'ecart_type_kwh']].values
@@ -336,7 +342,6 @@ elif menu == "📈 Analyses Avancées":
                                 color="Cluster", title="K-Means - Clusters de consommation")
             fig_km.update_traces(textposition='top center')
 
-            # Ajouter les centroïdes
             for i, centroid in enumerate(result_km['centroids']):
                 fig_km.add_scatter(x=[centroid[0]], y=[centroid[1]],
                                    mode='markers+text', text=[f"C{i+1}"],
@@ -346,7 +351,6 @@ elif menu == "📈 Analyses Avancées":
 
             st.plotly_chart(fig_km, use_container_width=True)
 
-            # Résumé des clusters
             st.markdown("**Résumé des clusters :**")
             for i in range(k):
                 cluster_data = df_clusters[df_clusters['Cluster'] == f"Cluster {i+1}"]
@@ -421,4 +425,4 @@ elif menu == "📥 Export Excel":
 
 # ---------- PIED DE PAGE ----------
 st.markdown("---")
-st.caption("⚡ WattScope | TP INF 232 EC2 | Analyse de données | Lawane Oscar 24G2206")
+st.caption("⚡ WattScope | Analyse de données | Lawane Oscar 24G2206")
