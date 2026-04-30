@@ -66,7 +66,7 @@ if menu == "🏠 Accueil & Collecte":
         if clients:
             data = []
             for c in clients:
-                nb_releves = len(c.releves)
+                nb_releves = db.query(ReleveQuotidien).filter(ReleveQuotidien.foyer_id == c.id).count()
                 data.append({
                     "ID": c.id,
                     "Nom": c.nom_utilisateur,
@@ -163,8 +163,12 @@ elif menu == "📊 Dashboard Client":
                                      format_func=lambda c: f"{c.nom_utilisateur} - {c.region}")
 
         if client_choisi:
-            releves = list(client_choisi.releves)
-            appareils = db.query(Appareil).filter(Appareil.foyer_id == client_choisi.id).all()
+            client_id = client_choisi.id
+            # Requêtes directes (pas de lazy load)
+            releves = db.query(ReleveQuotidien).filter(
+                ReleveQuotidien.foyer_id == client_id
+            ).order_by(ReleveQuotidien.date_releve.desc()).all()
+            appareils = db.query(Appareil).filter(Appareil.foyer_id == client_id).all()
 
             # ---- STATISTIQUES DESCRIPTIVES ----
             st.subheader(f"📊 Statistiques - {client_choisi.nom_utilisateur}")
@@ -172,7 +176,6 @@ elif menu == "📊 Dashboard Client":
 
             conso_moy = round(sum(r.index_compteur for r in releves) / len(releves), 2) if releves else 0
             conso_max = max([r.index_compteur for r in releves]) if releves else 0
-            conso_min = min([r.index_compteur for r in releves]) if releves else 0
             ecart_type = round(np.std([r.index_compteur for r in releves]), 2) if releves else 0
             coupure_moy = round(sum(r.duree_coupure_minutes for r in releves) / len(releves), 1) if releves else 0
 
@@ -187,7 +190,7 @@ elif menu == "📊 Dashboard Client":
                 st.markdown("---")
                 st.subheader("📈 Évolution de la consommation")
                 df_rel = pd.DataFrame([{"Date": r.date_releve, "Consommation (kWh)": r.index_compteur}
-                                       for r in releves]).sort_values("Date")
+                                       for r in reversed(releves)])
                 fig = px.line(df_rel, x="Date", y="Consommation (kWh)", markers=True)
                 fig.update_traces(line_color="#ffd700", marker_color="#2c5364")
                 st.plotly_chart(fig, use_container_width=True)
@@ -214,7 +217,6 @@ elif menu == "📊 Dashboard Client":
                     else:
                         st.info("ℹ️ Corrélation FAIBLE")
 
-                    # Graphique de régression
                     fig_reg = px.scatter(x=X, y=y, labels={"x": "Température (°C)", "y": "Consommation (kWh)"},
                                          title="Nuage de points + Droite de régression")
                     x_line = np.linspace(min(X), max(X), 100)
@@ -229,12 +231,14 @@ elif menu == "📊 Dashboard Client":
             st.markdown("---")
             st.subheader("📋 Derniers relevés")
             if releves:
-                df_rel = pd.DataFrame([{"Date": str(r.date_releve), "kWh": r.index_compteur,
-                                         "Coupure": f"{r.duree_coupure_minutes} min",
-                                         "Temp.": f"{r.temperature_exterieure}°C" if r.temperature_exterieure else "N/A",
-                                         "Coût": f"{r.cout_estime_fcfa} FCFA" if r.cout_estime_fcfa else "N/A"}
-                                        for r in releves[:20]])
-                st.dataframe(df_rel, use_container_width=True, hide_index=True)
+                df_rel_table = pd.DataFrame([{
+                    "Date": str(r.date_releve),
+                    "kWh": r.index_compteur,
+                    "Coupure": f"{r.duree_coupure_minutes} min",
+                    "Temp.": f"{r.temperature_exterieure}°C" if r.temperature_exterieure else "N/A",
+                    "Coût": f"{r.cout_estime_fcfa} FCFA" if r.cout_estime_fcfa else "N/A"
+                } for r in releves[:20]])
+                st.dataframe(df_rel_table, use_container_width=True, hide_index=True)
 
     db.close()
 
@@ -402,8 +406,9 @@ elif menu == "📥 Export Excel":
         client_choisi = st.selectbox("Choisissez un client", clients,
                                      format_func=lambda c: c.nom_utilisateur)
         if client_choisi and st.button("📥 Télécharger le fichier Excel"):
-            releves = list(client_choisi.releves)
-            appareils = db.query(Appareil).filter(Appareil.foyer_id == client_choisi.id).all()
+            client_id = client_choisi.id
+            releves = db.query(ReleveQuotidien).filter(ReleveQuotidien.foyer_id == client_id).all()
+            appareils = db.query(Appareil).filter(Appareil.foyer_id == client_id).all()
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df_rel = pd.DataFrame([{"Date": r.date_releve, "kWh": r.index_compteur,
@@ -425,4 +430,4 @@ elif menu == "📥 Export Excel":
 
 # ---------- PIED DE PAGE ----------
 st.markdown("---")
-st.caption("⚡ WattScope | Analyse de données | Lawane Oscar 24G2206")
+st.caption("⚡ WattScope | TP INF 232 EC2 | Analyse de données | Lawane Oscar 24G2206")
